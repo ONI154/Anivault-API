@@ -24,7 +24,7 @@ function publicBase(req: Request): string {
   return `${proto}://${req.get('host')}`;
 }
 
-function proxiedHlsUrl(req: Request, url: string, ref?: string): string {
+export function proxiedHlsUrl(req: Request, url: string, ref?: string): string {
   const refParam = ref ? `&ref=${encodeURIComponent(ref)}` : '';
   return `${publicBase(req)}/api/proxy/hls?url=${encodeURIComponent(url)}${refParam}`;
 }
@@ -33,7 +33,7 @@ function proxiedVideoUrl(req: Request, url: string): string {
   return `${publicBase(req)}/api/proxy/video?url=${encodeURIComponent(url)}`;
 }
 
-function proxiedSubtitleUrl(req: Request, url: string, ref?: string): string {
+export function proxiedSubtitleUrl(req: Request, url: string, ref?: string): string {
   const refParam = ref ? `&ref=${encodeURIComponent(ref)}` : '';
   return `${publicBase(req)}/api/proxy/subtitle?url=${encodeURIComponent(url)}${refParam}`;
 }
@@ -210,7 +210,7 @@ router.get('/episodes', async (req: Request, res: Response) => {
 });
 
 router.get('/servers', async (req: Request, res: Response) => {
-  const { anilistId, malId, ep, type = 'sub', source = 'anikoto', heavenId } = req.query;
+  const { anilistId, malId, ep, type = 'sub', source = 'anikoto', heavenId, providerAnimeId, episodeId, episodeSession } = req.query;
   if (!ep) return res.status(400).json({ error: 'Missing ?ep=' });
   if (!anilistId && !malId && !(source === 'animeheaven' && heavenId)) return res.status(400).json({ error: 'Provide ?anilistId= or ?malId=, or ?heavenId= for AnimeHeaven' });
   const epNum = parseInt(ep as string);
@@ -619,7 +619,7 @@ router.get('/proxy/video', async (req: Request, res: Response) => {
 });
 
 router.get('/watch', async (req: Request, res: Response) => {
-  const { anilistId, malId, heavenId, ep, type = 'sub', source = 'anikoto', server } = req.query;
+  const { anilistId, malId, heavenId, ep, type = 'sub', source = 'anikoto', server, serverId } = req.query;
   if (!ep) return res.status(400).json({ error: 'Missing ?ep=' });
   if (!anilistId && !malId && !(source === 'animeheaven' && heavenId)) return res.status(400).json({ error: 'Provide ?anilistId= or ?malId=, or ?heavenId= for AnimeHeaven' });
   const id = heavenId && source === 'animeheaven' ? String(heavenId) : anilistId ? String(anilistId) : `mal-${malId}`;

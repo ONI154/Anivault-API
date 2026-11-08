@@ -395,7 +395,7 @@ pre { padding:20px; overflow-x:auto; font-family:var(--mono); font-size:12px; li
   <!-- API TESTER -->
   <section class="section" id="tester">
     <div class="section-title">API Tester</div>
-    <div class="section-sub">Two ways in: the guided streaming flow (search → source → server → watch), or a raw form for any of the ~35 documented endpoints.</div>
+    <div class="section-sub">Use the guided streaming flow (search → source → server → watch), or use the raw form for any documented endpoint.</div>
 
     <div class="tester-mode-switch">
       <button class="tester-mode-btn active" onclick="setTesterMode('streaming', this)">🎬 Watch &amp; Stream</button>
@@ -473,7 +473,7 @@ pre { padding:20px; overflow-x:auto; font-family:var(--mono); font-size:12px; li
 
         <!-- SOURCE -->
         <label class="field-label">Source</label>
-        <div class="source-grid" style="margin-bottom:20px;grid-template-columns:repeat(3,1fr);">
+        <div class="source-grid" style="margin-bottom:20px;grid-template-columns:repeat(5,1fr);">
           <div class="source-card active" onclick="setSource('anikoto',this)" id="src-anikoto">
             <div class="source-icon">🦊</div>
             <span class="source-name">Anikoto</span>
@@ -493,6 +493,11 @@ pre { padding:20px; overflow-x:auto; font-family:var(--mono); font-size:12px; li
             <div class="source-icon">▶️</div>
             <span class="source-name">MegaPlay Direct</span>
             <span class="source-url">megaplay.buzz</span>
+          </div>
+          <div class="source-card" onclick="setSource('zokoanime',this)" id="src-zokoanime">
+            <div class="source-icon">⚡</div>
+            <span class="source-name">ZokoAnime</span>
+            <span class="source-url">zokoanime.video</span>
           </div>
         </div>
         <div id="animeHeavenVercelNotice" class="hosting-warning" role="status" style="display:none">
@@ -1413,6 +1418,7 @@ GET /api/watch?source=<span class="str">animeheaven</span>&heavenId=<span class=
 // ── STATE
 let selType = 'sub', selSource = 'anikoto', selServer = '', selEndpoint = 'watch';
 let selAnime = null, lastResult = null;
+let providerEpisodes = [], providerServers = [], selProviderEpisode = null, selProviderServer = null;
 let debounceTimer = null;
 
 // ── NAV
@@ -1448,6 +1454,10 @@ function copyResult() {
 
 // ── SEGMENT CONTROLS
 function setType(t, btn) {
+  if (selSource === 'zokoanime' && t === 'raw') {
+    alert('ZokoAnime supports SUB and DUB only.');
+    return;
+  }
   selType = t;
   btn.closest('.seg-control').querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -1456,6 +1466,10 @@ function setType(t, btn) {
 }
 function setSource(s, card) {
   selSource = s;
+  selAnime = null; providerEpisodes = []; providerServers = []; selProviderEpisode = null; selProviderServer = null;
+  document.getElementById('selectedAnime').classList.remove('visible');
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchInput').placeholder = 'e.g. Naruto, Demon Slayer, One Piece...';
   document.querySelectorAll('.source-card').forEach(c => c.classList.remove('active'));
   card.classList.add('active');
   document.getElementById('heavenIdWrap').style.display = s === 'animeheaven' ? 'block' : 'none';
@@ -1465,6 +1479,10 @@ function setSource(s, card) {
   if (selAnime && document.getElementById('epInput').value) loadServers();
 }
 function setEndpoint(e, btn) {
+  if (selSource === 'zokoanime' && e === 'episodes') {
+    alert('ZokoAnime currently provides Servers and Watch endpoints only.');
+    return;
+  }
   selEndpoint = e;
   btn.closest('.seg-control').querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -1481,11 +1499,11 @@ function setTab(tab, btn) {
 function selectServer(chip) {
   document.querySelectorAll('.server-chip').forEach(c => c.classList.remove('active'));
   chip.classList.add('active');
-  selServer = chip.dataset.server;
+  selServer = chip.dataset.serverId || chip.dataset.server;
   updateUrlPreview();
 }
 function resetServers() {
-  selServer = '';
+  selServer = ''; providerServers = [];
   document.getElementById('serverChips').innerHTML =
     '<div class="server-chip auto active" data-server="" onclick="selectServer(this)">Auto</div>';
 }
@@ -1508,22 +1526,40 @@ async function loadServers() {
 
   try {
     const base = getBase();
-    const serverUrl = selSource === 'animeheaven' && heavenId
-      ? `${base}/api/servers?source=animeheaven&heavenId=${encodeURIComponent(heavenId)}&ep=${ep}&type=${selType}`
-      : selAnime.id
+    let serverUrl;
+
+    if (selSource === 'zokoanime') {
+      if (selType === 'raw') throw new Error('ZokoAnime supports SUB and DUB only.');
+      const idParam = selAnime.id
+        ? `anilistId=${encodeURIComponent(selAnime.id)}`
+        : `malId=${encodeURIComponent(selAnime.malId)}`;
+      serverUrl = `${base}/api/providers/zokoanime/servers?${idParam}&ep=${encodeURIComponent(ep)}`;
+    } else if (selSource === 'animeheaven' && heavenId) {
+      serverUrl = `${base}/api/servers?source=animeheaven&heavenId=${encodeURIComponent(heavenId)}&ep=${ep}&type=${selType}`;
+    } else {
+      serverUrl = selAnime.id
         ? `${base}/api/servers?anilistId=${selAnime.id}&ep=${ep}&type=${selType}&source=${selSource}`
         : `${base}/api/servers?malId=${selAnime.malId}&ep=${ep}&type=${selType}&source=${selSource}`;
+    }
+
     const res = await fetch(serverUrl);
     const data = await res.json();
-    const servers = data.servers || [];
-    servers.forEach(s => {
+    if (!res.ok) throw new Error(data.error || 'Server lookup failed');
+
+    const servers = (data.servers || []).filter(server =>
+      selSource !== 'zokoanime' || !server.type || server.type === selType
+    );
+
+    servers.forEach(server => {
       const chip = document.createElement('div');
       chip.className = 'server-chip';
-      chip.dataset.server = s.name;
-      chip.textContent = s.name + (s.type !== selType ? ` (${s.type})` : '');
+      chip.dataset.server = server.name || 'Server';
+      if (server.sourceId) chip.dataset.serverId = server.sourceId;
+      chip.textContent = server.name + (server.type ? ` (${server.type.toUpperCase()})` : '');
       chip.onclick = () => selectServer(chip);
       chips.appendChild(chip);
     });
+
     if (!servers.length) {
       const msg = document.createElement('span');
       msg.style.cssText = 'font-family:var(--mono);font-size:11px;color:var(--muted)';
@@ -1533,13 +1569,14 @@ async function loadServers() {
   } catch(e) {
     const msg = document.createElement('span');
     msg.style.cssText = 'font-family:var(--mono);font-size:11px;color:var(--accent)';
-    msg.textContent = 'Could not load servers';
+    msg.textContent = e.message || 'Could not load servers';
     chips.appendChild(msg);
+  } finally {
+    label.style.display = 'none';
   }
-  label.style.display = 'none';
 }
-
 function onEpChange() {
+  resetServers();
   updateUrlPreview();
   loadServers();
 }
@@ -1559,44 +1596,46 @@ async function doSearch() {
   sr.innerHTML = '<div style="padding:14px 16px;font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px"><div class="spinner"></div>Searching AniList...</div>';
 
   try {
-    const res = await fetch(`${getBase()}/api/search?q=${encodeURIComponent(q)}`);
+    const searchUrl = `${getBase()}/api/search?q=${encodeURIComponent(q)}`;
+    const res = await fetch(searchUrl);
     const data = await res.json();
     const results = data.results || [];
+    if (!res.ok) throw new Error(data.error || 'Search failed');
     if (!results.length) {
       sr.innerHTML = '<div style="padding:14px 16px;font-family:var(--mono);font-size:12px;color:var(--muted)">No results found</div>';
       return;
     }
-    sr.innerHTML = results.map(r => `
-      <div class="search-item" onclick='pickAnime(${JSON.stringify(r).replace(/'/g,"&#39;")})'>
-        <img src="${r.coverImage}" alt="" />
-        <div>
-          <div class="search-item-title">${r.title}</div>
-          <div class="search-item-meta">AniList: ${r.id} · MAL: ${r.malId||'—'} · ${r.format||'—'} · ${r.episodes||'?'} eps</div>
-        </div>
-      </div>`).join('');
+    sr.innerHTML = results.map(r => {
+      const image = r.coverImage || r.image || '';
+      const meta = `AniList: ${r.id} · MAL: ${r.malId||'—'} · ${r.format||'—'} · ${r.episodes||'?'} eps`;
+      return `<div class="search-item" onclick='pickAnime(${JSON.stringify(r).replace(/'/g,"&#39;")})'>
+        <img src="${escapeAttr(image)}" alt="" />
+        <div><div class="search-item-title">${escapeAttr(r.title)}</div><div class="search-item-meta">${escapeAttr(meta)}</div></div>
+      </div>`;
+    }).join('');
   } catch(e) {
-    sr.innerHTML = `<div style="padding:14px 16px;font-family:var(--mono);font-size:12px;color:var(--accent)">Error: ${e.message}</div>`;
+    sr.innerHTML = `<div style="padding:14px 16px;font-family:var(--mono);font-size:12px;color:var(--accent)">Error: ${escapeAttr(e.message)}</div>`;
   }
 }
 
-function pickAnime(r) {
+async function pickAnime(r) {
   selAnime = r;
   document.getElementById('searchResults').style.display = 'none';
-  document.getElementById('searchInput').value = r.title;
+  document.getElementById('searchInput').value = r.title || '';
 
   const el = document.getElementById('selectedAnime');
   el.classList.add('visible');
-  document.getElementById('selCover').src = r.coverImage || '';
-  document.getElementById('selTitle').textContent = r.title;
-  document.getElementById('selAlId').textContent = r.id;
+  document.getElementById('selCover').src = r.coverImage || r.image || '';
+  document.getElementById('selTitle').textContent = r.title || 'Selected anime';
+  document.getElementById('selAlId').textContent = r.id || '—';
   document.getElementById('selMalId').textContent = r.malId || '—';
   document.getElementById('selEps').textContent = (r.episodes || '?') + ' eps';
   document.getElementById('selFormat').textContent = r.format || '';
 
+  providerEpisodes = []; providerServers = [];
   resetServers();
   updateUrlPreview();
-  const ep = document.getElementById('epInput').value;
-  if (ep) loadServers();
+  if (document.getElementById('epInput').value) loadServers();
 }
 
 function clearSelection() {
@@ -1612,12 +1651,27 @@ function buildUrl() {
   const base = getBase();
   const ep = document.getElementById('epInput').value || '1';
   const heavenId = getHeavenId();
+
+  if (selSource === 'zokoanime') {
+    if (!selAnime) return null;
+    if (selEndpoint === 'episodes') return null;
+    const idParam = selAnime.id
+      ? `anilistId=${encodeURIComponent(selAnime.id)}`
+      : `malId=${encodeURIComponent(selAnime.malId)}`;
+    if (selEndpoint === 'servers') {
+      return `${base}/api/providers/zokoanime/servers?${idParam}&ep=${encodeURIComponent(ep)}`;
+    }
+    const serverId = selServer || `${selAnime.malId || ''}::${ep}::${selType}`;
+    return `${base}/api/providers/zokoanime/watch?serverId=${encodeURIComponent(serverId)}`;
+  }
+
   if (selSource === 'animeheaven' && heavenId) {
     if (selEndpoint === 'watch') return `${base}/api/watch?source=animeheaven&heavenId=${encodeURIComponent(heavenId)}&ep=${ep}&type=${selType}`;
     if (selEndpoint === 'servers') return `${base}/api/servers?source=animeheaven&heavenId=${encodeURIComponent(heavenId)}&ep=${ep}&type=${selType}`;
     if (selEndpoint === 'episodes') return `${base}/api/episodes?source=animeheaven&heavenId=${encodeURIComponent(heavenId)}`;
   }
   if (!selAnime) return null;
+
   const id = selAnime.id ? selAnime.id : `mal-${selAnime.malId}`;
   if (selEndpoint === 'watch') {
     let url = `${base}/api/watch/${selSource}/${id}/${ep}/${selType}`;
