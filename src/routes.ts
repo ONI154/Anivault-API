@@ -299,9 +299,8 @@ router.get('/servers', async (req: Request, res: Response) => {
   }
 });
 
-async function watchHandler(req: Request, res: Response, directAnikotoId?: string) {
-  const source = directAnikotoId ? 'anikoto' : req.params.source;
-  const id = directAnikotoId || req.params.id;
+async function watchHandler(req: Request, res: Response) {
+  const { source, id, ep, type } = req.params;
   const { ep, type } = req.params;
   const preferredServer = req.query.server as string | undefined;
   const heavenOverride = req.query.heavenId as string | undefined;

@@ -169,13 +169,6 @@ URL dynamically.
 GET /api/watch?source=anikoto&anilistId=20&ep=1&type=sub
 ```
 
-Direct Anikoto playback is also available without AniList/MAL mapping:
-
-```
-GET /api/watch/v2/anikoto/12345/1/sub
-GET /api/watch/v2/anikoto/tensei-shitara-slime-datta-ken-2nd-season-part-2/1/dub
-```
-
 #### `GET /api/proxy/hls?url=&ref=`
 Proxies an `.m3u8` playlist (and rewrites internal segment/key URIs to also
 route through this proxy) so the browser never hits the upstream CDN
