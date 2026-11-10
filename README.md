@@ -164,6 +164,9 @@ GET /api/watch/megaplay/mal-20899/1/sub
 #### `GET /api/watch`
 Same as above, as query params instead of a path — useful when building a
 URL dynamically.
+
+```
+GET /api/watch?source=anikoto&anilistId=20&ep=1&type=sub
 ```
 
 Direct Anikoto playback is also available without AniList/MAL mapping:
@@ -171,9 +174,6 @@ Direct Anikoto playback is also available without AniList/MAL mapping:
 ```
 GET /api/watch/v2/anikoto/12345/1/sub
 GET /api/watch/v2/anikoto/tensei-shitara-slime-datta-ken-2nd-season-part-2/1/dub
-```
-
-GET /api/watch?source=anikoto&anilistId=20&ep=1&type=sub
 ```
 
 #### `GET /api/proxy/hls?url=&ref=`
