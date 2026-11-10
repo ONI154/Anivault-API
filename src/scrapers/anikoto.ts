@@ -16,7 +16,7 @@ import { cacheGet, cacheSet } from '../utils/cache';
 //     regular server list, that points at a CDN not behind bot-protection.
 // ══════════════════════════════════════════════════════════════
 
-const BASE = 'https://anikoto.net';
+const BASE = 'https://anikoto.to';
 const http = makeClient(BASE, BASE + '/');
 const ajax = makeAjaxClient(BASE, BASE + '/');
 
