@@ -27,6 +27,13 @@ app.use('/api', limiter);
 app.use('/api', routes);
 app.use('/api/providers', providerRoutes);
 
+// Never let unknown API paths fall through to the documentation HTML.
+// This also makes missing/un-deployed endpoints fail loudly as JSON instead
+// of appearing to return a successful HTML page to API clients.
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'API endpoint not found' });
+});
+
 // Serve static docs/tester
 app.use(express.static(path.join(__dirname, '../public')));
 

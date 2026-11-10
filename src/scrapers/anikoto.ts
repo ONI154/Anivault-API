@@ -16,7 +16,10 @@ import { cacheGet, cacheSet } from '../utils/cache';
 //     regular server list, that points at a CDN not behind bot-protection.
 // ══════════════════════════════════════════════════════════════
 
-const BASE = 'https://anikoto.net';
+// Use Anikoto's current official primary domain. The legacy anikoto.to host is not
+// listed among Anikoto's verified domains and caused every search/AJAX lookup to miss.
+// Set ANIKOTO_BASE_URL to an official mirror if the primary domain is unavailable.
+const BASE = (process.env.ANIKOTO_BASE_URL || 'https://anikototv.to').replace(/\/+$/, '');
 const http = makeClient(BASE, BASE + '/');
 const ajax = makeAjaxClient(BASE, BASE + '/');
 
@@ -100,6 +103,7 @@ export interface AnikotoStream {
 interface AnikotoSearchResult {
   slug: string;
   title: string;
+  japaneseTitle?: string;
 }
 
 function normalizeTitle(title: string): string {
@@ -155,9 +159,11 @@ export async function searchAnikoto(query: string): Promise<AnikotoSearchResult[
         .replace(/^\/watch\//, '')
         .replace(/\/ep-\d+$/, '')
         .replace(/\/$/, '');
-      const title = $el.find('.name, .d-title').first().text().trim() || anchor.attr('title')?.trim() || '';
+      const titleAnchor = $el.find('.name, .d-title').first();
+      const title = titleAnchor.text().trim() || anchor.attr('title')?.trim() || '';
+      const japaneseTitle = titleAnchor.attr('data-jp')?.trim() || anchor.attr('data-jp')?.trim() || undefined;
       if (!slug || !title) return;
-      results.push({ slug, title });
+      results.push({ slug, title, japaneseTitle });
     }
   );
 
@@ -187,7 +193,16 @@ export async function findAnikotoSlug(title: string): Promise<string | null> {
   if (!unique.length) return null;
 
   const ranked = unique
-    .map((result) => ({ result, score: scoreTitle(title, result.title) }))
+    .map((result) => ({
+      result,
+      // Anikoto exposes the Japanese/romaji title separately through data-jp.
+      // Score both names so an exact alternate-title match is not discarded
+      // just because the visible English title uses different season wording.
+      score: Math.max(
+        scoreTitle(title, result.title),
+        result.japaneseTitle ? scoreTitle(title, result.japaneseTitle) : 0
+      ),
+    }))
     .filter((entry) => entry.score >= 75)
     .sort((a, b) => b.score - a.score);
 
@@ -214,6 +229,7 @@ interface RawEpisode {
   dataIds?: string;
   dataMal?: string;
   dataTimestamp?: string;
+  slug?: string;
 }
 
 async function fetchRawEpisodes(slug: string): Promise<RawEpisode[]> {
@@ -274,6 +290,60 @@ export async function getAnikotoEpisodes(slug: string): Promise<AnikotoEpisode[]
     id: `${slug}::${ep.num}::${ep.dataIds ?? ''}::${ep.dataMal ?? ''}::${ep.dataTimestamp ?? ''}`,
     title: ep.title,
   }));
+}
+
+// Resolve episodes from Anikoto's own numeric anime ID without first resolving
+// a MAL/AniList title. The ID is the data-id attached to #watch-main and is
+// accepted directly by Anikoto's /ajax/episode/list/:id endpoint.
+export async function getAnikotoEpisodesById(idOrSlug: string): Promise<AnikotoEpisode[]> {
+  const identifier = String(idOrSlug || '').trim();
+  if (!identifier) return [];
+  if (!/^\d+$/.test(identifier)) return getAnikotoEpisodes(identifier);
+
+  const cacheKey = `anikoto:eps:id:${identifier}`;
+  const cached = cacheGet<AnikotoEpisode[]>(cacheKey);
+  if (cached) return cached;
+
+  const response = await ajax.get(`/ajax/episode/list/${encodeURIComponent(identifier)}`);
+  const html = response.data?.result || '';
+  if (typeof html !== 'string' || !html.trim()) return [];
+
+  const $ = cheerio.load(html);
+  const episodes: RawEpisode[] = [];
+  $('#w-episodes ul.ep-range li a, ul.ep-range li a, #w-episodes a[href], a[href], a[data-num]').each((_, el) => {
+    const $el = $(el);
+    const href = $el.attr('href') ?? '';
+    if (!href.includes('/watch/') && !$el.attr('data-num')) return;
+
+    const epNumRaw =
+      $el.attr('data-num') || $el.find('.number, .d-title, span').first().text().trim() || href.split('/ep-')[1] || '';
+    const num = parseFloat(epNumRaw);
+    if (!Number.isFinite(num)) return;
+
+    const slug = href.match(/\/watch\/([^/?#]+)/)?.[1] || identifier;
+    episodes.push({
+      num,
+      title: $el.attr('title')?.trim() || `Episode ${epNumRaw}`,
+      dataIds: $el.attr('data-ids') ?? $el.attr('data-id') ?? undefined,
+      dataMal: $el.attr('data-mal') ?? undefined,
+      dataTimestamp: $el.attr('data-timestamp') ?? undefined,
+      // Keep the canonical watch slug so the existing server/watch resolver
+      // can construct the correct episode referer even when lookup began by ID.
+      slug,
+    });
+  });
+
+  const unique = Array.from(new Map(episodes.map((ep) => [ep.num, ep])).values()).sort((a, b) => a.num - b.num);
+  const result = unique.map((ep) => {
+    const slug = ep.slug || identifier;
+    return {
+      num: ep.num,
+      id: `${slug}::${ep.num}::${ep.dataIds ?? ''}::${ep.dataMal ?? ''}::${ep.dataTimestamp ?? ''}`,
+      title: ep.title,
+    };
+  });
+  if (result.length) cacheSet(cacheKey, result, 'episodes');
+  return result;
 }
 
 // ══════════════════════════════════════════════════════════════
