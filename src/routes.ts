@@ -561,7 +561,9 @@ async function watchHandler(req: Request, res: Response, directAnikotoId?: strin
   }
 }
 
-router.get('/watch/:source/:id/:ep/:type', watchHandler);
+router.get('/watch/:source/:id/:ep/:type', (req: Request, res: Response) =>
+  watchHandler(req, res)
+);
 router.get('/watch/v2/anikoto/:anikotoId/:ep/:type', (req: Request, res: Response) =>
   watchHandler(req, res, req.params.anikotoId)
 );
