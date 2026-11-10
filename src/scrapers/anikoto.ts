@@ -103,6 +103,7 @@ export interface AnikotoStream {
 interface AnikotoSearchResult {
   slug: string;
   title: string;
+  japaneseTitle?: string;
 }
 
 function normalizeTitle(title: string): string {
@@ -158,9 +159,11 @@ export async function searchAnikoto(query: string): Promise<AnikotoSearchResult[
         .replace(/^\/watch\//, '')
         .replace(/\/ep-\d+$/, '')
         .replace(/\/$/, '');
-      const title = $el.find('.name, .d-title').first().text().trim() || anchor.attr('title')?.trim() || '';
+      const titleAnchor = $el.find('.name, .d-title').first();
+      const title = titleAnchor.text().trim() || anchor.attr('title')?.trim() || '';
+      const japaneseTitle = titleAnchor.attr('data-jp')?.trim() || anchor.attr('data-jp')?.trim() || undefined;
       if (!slug || !title) return;
-      results.push({ slug, title });
+      results.push({ slug, title, japaneseTitle });
     }
   );
 
