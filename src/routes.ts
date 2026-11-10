@@ -312,7 +312,7 @@ async function watchHandler(req: Request, res: Response, directAnikotoId?: strin
   if (!['sub', 'dub', 'raw'].includes(type)) return res.status(400).json({ error: 'type must be: sub, dub, raw' });
 
   const directAnikoto = source === 'anikoto' && Boolean(directAnikotoId);
-  const directHeavenId = source === 'animeheaven' && !id.startsWith('mal-') && !/^\\d+$/.test(id);
+  const directHeavenId = source === 'animeheaven' && !id.startsWith('mal-') && !/^\d+$/.test(id);
   const anilistId = directHeavenId || id.startsWith('mal-') ? undefined : id;
   const malId = id.startsWith('mal-') ? id.replace('mal-', '') : undefined;
 
