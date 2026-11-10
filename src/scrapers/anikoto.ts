@@ -214,6 +214,7 @@ interface RawEpisode {
   dataIds?: string;
   dataMal?: string;
   dataTimestamp?: string;
+  slug?: string;
 }
 
 async function fetchRawEpisodes(slug: string): Promise<RawEpisode[]> {
@@ -311,15 +312,15 @@ export async function getAnikotoEpisodesById(idOrSlug: string): Promise<AnikotoE
       dataIds: $el.attr('data-ids') ?? $el.attr('data-id') ?? undefined,
       dataMal: $el.attr('data-mal') ?? undefined,
       dataTimestamp: $el.attr('data-timestamp') ?? undefined,
-      // The slug is stored on each episode below so the existing server and
-      // watch resolvers can continue using their normal referer construction.
-      ...( { __anikotoSlug: slug } as any ),
-    } as RawEpisode);
+      // Keep the canonical watch slug so the existing server/watch resolver
+      // can construct the correct episode referer even when lookup began by ID.
+      slug,
+    });
   });
 
   const unique = Array.from(new Map(episodes.map((ep) => [ep.num, ep])).values()).sort((a, b) => a.num - b.num);
   const result = unique.map((ep) => {
-    const slug = (ep as any).__anikotoSlug || identifier;
+    const slug = ep.slug || identifier;
     return {
       num: ep.num,
       id: `${slug}::${ep.num}::${ep.dataIds ?? ''}::${ep.dataMal ?? ''}::${ep.dataTimestamp ?? ''}`,
