@@ -261,12 +261,21 @@ router.get('/servers/v2', async (req: Request, res: Response) => {
 // TEMPORARY: diagnostic payload for investigating missing Anikoto mappings.
 // Enable with ?debug=1 on /servers. Remove after the lookup issue is resolved.
 async function buildAnikotoDebug(siteIds: any, malId?: string) {
-  const malDetails = malId ? await getAnimeDetails(Number(malId)).catch((error) => ({ error: String(error) })) : null;
+  let malDetails: Awaited<ReturnType<typeof getAnimeDetails>> | null = null;
+  let malDetailsError: string | null = null;
+  if (malId) {
+    try {
+      malDetails = await getAnimeDetails(Number(malId));
+    } catch (error) {
+      malDetailsError = String(error);
+    }
+  }
+
   const titles = Array.from(new Set([
     siteIds?.title,
     siteIds?.altTitle,
-    malDetails && 'titleEnglish' in malDetails ? malDetails.titleEnglish : null,
-    malDetails && 'title' in malDetails ? malDetails.title : null,
+    malDetails?.titleEnglish,
+    malDetails?.title,
   ].filter((value): value is string => typeof value === 'string' && value.trim().length >= 4)));
 
   const searches = await Promise.all(titles.map(async (query) => {
@@ -288,9 +297,9 @@ async function buildAnikotoDebug(siteIds: any, malId?: string) {
       altTitle: siteIds?.altTitle ?? null,
       anikotoId: siteIds?.siteIds?.anikoto ?? null,
     },
-    malDetails: malDetails && 'error' in malDetails
-      ? malDetails
-      : malDetails ? { title: malDetails.title, titleEnglish: malDetails.titleEnglish, titleJapanese: malDetails.titleJapanese } : null,
+    malDetails: malDetails
+      ? { title: malDetails.title, titleEnglish: malDetails.titleEnglish, titleJapanese: malDetails.titleJapanese }
+      : malDetailsError ? { error: malDetailsError } : null,
     searches,
   };
 }
@@ -341,8 +350,9 @@ router.get('/servers', async (req: Request, res: Response) => {
   }
 });
 
-async function watchHandler(req: Request, res: Response) {
-  const { source, id, ep, type } = req.params;
+async function watchHandler(req: Request, res: Response, directAnikotoId?: string) {
+  const source = req.params.source ?? (directAnikotoId ? 'anikoto' : '');
+  const id = req.params.id ?? directAnikotoId ?? '';
   const { ep, type } = req.params;
   const preferredServer = req.query.server as string | undefined;
   const heavenOverride = req.query.heavenId as string | undefined;
