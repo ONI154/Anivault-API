@@ -780,7 +780,7 @@ function getMegaPlaySigningKey(script: string): string | null {
   if (!keyVar) return null;
 
   const keyExpression = script.match(
-    new RegExp(`(?:const|let|var)\\s+${keyVar}\\s*=\\s*(${objectName}\\.[A-Za-z_$][\\w$]*\\(\d+\\))`)
+    new RegExp(`(?:const|let|var)\\s+${keyVar}\\s*=\\s*(${objectName}\\.[A-Za-z_$][\\w$]*\\(\\d+\\))`)
   )?.[1];
   if (!keyExpression) return null;
 
