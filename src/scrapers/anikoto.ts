@@ -282,7 +282,7 @@ export async function getAnikotoEpisodes(slug: string): Promise<AnikotoEpisode[]
 export async function getAnikotoEpisodesById(idOrSlug: string): Promise<AnikotoEpisode[]> {
   const identifier = String(idOrSlug || '').trim();
   if (!identifier) return [];
-  if (!/^\\d+$/.test(identifier)) return getAnikotoEpisodes(identifier);
+  if (!/^\d+$/.test(identifier)) return getAnikotoEpisodes(identifier);
 
   const cacheKey = `anikoto:eps:id:${identifier}`;
   const cached = cacheGet<AnikotoEpisode[]>(cacheKey);
@@ -304,7 +304,7 @@ export async function getAnikotoEpisodesById(idOrSlug: string): Promise<AnikotoE
     const num = parseFloat(epNumRaw);
     if (!Number.isFinite(num)) return;
 
-    const slug = href.match(/\\/watch\\/([^/?#]+)/)?.[1] || identifier;
+    const slug = href.match(/\/watch\/([^/?#]+)/)?.[1] || identifier;
     episodes.push({
       num,
       title: $el.attr('title')?.trim() || `Episode ${epNumRaw}`,
@@ -779,7 +779,7 @@ function getMegaPlaySigningKey(script: string): string | null {
   if (!keyVar) return null;
 
   const keyExpression = script.match(
-    new RegExp(`(?:const|let|var)\\s+${keyVar}\\s*=\\s*(${objectName}\\.[A-Za-z_$][\\w$]*\\(\\d+\\))`)
+    new RegExp(`(?:const|let|var)\\s+${keyVar}\\s*=\\s*(${objectName}\\.[A-Za-z_$][\\w$]*\\(\d+\\))`)
   )?.[1];
   if (!keyExpression) return null;
 
