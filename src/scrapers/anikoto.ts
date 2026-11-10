@@ -16,7 +16,10 @@ import { cacheGet, cacheSet } from '../utils/cache';
 //     regular server list, that points at a CDN not behind bot-protection.
 // ══════════════════════════════════════════════════════════════
 
-const BASE = 'https://anikoto.to';
+// Use Anikoto's current official primary domain. The legacy anikoto.to host is not
+// listed among Anikoto's verified domains and caused every search/AJAX lookup to miss.
+// Set ANIKOTO_BASE_URL to an official mirror if the primary domain is unavailable.
+const BASE = (process.env.ANIKOTO_BASE_URL || 'https://anikototv.to').replace(/\/+$/, '');
 const http = makeClient(BASE, BASE + '/');
 const ajax = makeAjaxClient(BASE, BASE + '/');
 
