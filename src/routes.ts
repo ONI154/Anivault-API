@@ -349,7 +349,7 @@ async function watchHandler(req: Request, res: Response, directAnikotoId?: strin
     }
 
     const epResult = directAnikoto
-      ? { episodes: await getAnikotoEpisodesById(directAnikotoId as string), siteId: directAnikotoId as string }
+      ? { episodes: await getAnikotoEpisodesById(directAnikotoId as string), siteId: directAnikotoId as string, error: undefined }
       : await fetchEpisodes(source as Source, siteIds, { heavenId: heavenOverride });
     if (epResult.error) return res.status(404).json({ error: epResult.error });
 
