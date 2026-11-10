@@ -6,7 +6,7 @@ import { cacheStats } from './utils/cache';
 import { resolveEmbed } from './resolvers/megacloud';
 
 import { getHeavenEpisodes, getHeavenServers, getHeavenStream } from './scrapers/animeheaven';
-import { getAnikotoEpisodes, getAnikotoEpisodesById, getAnikotoServers, getAnikotoEmbedUrl } from './scrapers/anikoto';
+import { getAnikotoEpisodes, getAnikotoEpisodesById, getAnikotoServers, getAnikotoEmbedUrl, searchAnikoto } from './scrapers/anikoto';
 import { getMegaPlayStream } from './scrapers/megaplay';
 import { getDesidubEpisodes, getDesidubServers, getDesidubStream } from './scrapers/desidub';
 import { getAnimeDetails, getEpisodes as getMalEpisodes, getEpisode as getMalEpisode, getAllEpisodes as getAllMalEpisodes, getCharacters, getCharacterDetails, getAnimePictures, getCharacterPictures, getAnimeThemes, getAnimeVideos, getRecommendations, searchAnime, getExternalLinks, getStreamingPlatforms, debugSearchHtml, MalEpisode } from './scrapers/mal';
@@ -258,6 +258,43 @@ router.get('/servers/v2', async (req: Request, res: Response) => {
   }
 });
 
+// TEMPORARY: diagnostic payload for investigating missing Anikoto mappings.
+// Enable with ?debug=1 on /servers. Remove after the lookup issue is resolved.
+async function buildAnikotoDebug(siteIds: any, malId?: string) {
+  const malDetails = malId ? await getAnimeDetails(Number(malId)).catch((error) => ({ error: String(error) })) : null;
+  const titles = Array.from(new Set([
+    siteIds?.title,
+    siteIds?.altTitle,
+    malDetails && 'titleEnglish' in malDetails ? malDetails.titleEnglish : null,
+    malDetails && 'title' in malDetails ? malDetails.title : null,
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length >= 4)));
+
+  const searches = await Promise.all(titles.map(async (query) => {
+    try {
+      const candidates = await searchAnikoto(query);
+      return { query, candidateCount: candidates.length, candidates: candidates.slice(0, 30) };
+    } catch (error) {
+      return { query, error: String(error), candidates: [] };
+    }
+  }));
+
+  return {
+    temporary: true,
+    stage: 'site-id-mapping',
+    resolved: {
+      malId: siteIds?.malId ?? null,
+      anilistId: siteIds?.anilistId ?? null,
+      title: siteIds?.title ?? null,
+      altTitle: siteIds?.altTitle ?? null,
+      anikotoId: siteIds?.siteIds?.anikoto ?? null,
+    },
+    malDetails: malDetails && 'error' in malDetails
+      ? malDetails
+      : malDetails ? { title: malDetails.title, titleEnglish: malDetails.titleEnglish, titleJapanese: malDetails.titleJapanese } : null,
+    searches,
+  };
+}
+
 router.get('/servers', async (req: Request, res: Response) => {
   const { anilistId, malId, ep, type = 'sub', source = 'anikoto', heavenId, providerAnimeId, episodeId, episodeSession } = req.query;
   if (!ep) return res.status(400).json({ error: 'Missing ?ep=' });
@@ -273,7 +310,12 @@ router.get('/servers', async (req: Request, res: Response) => {
     if (!siteIds) return res.status(404).json({ error: 'Could not resolve site IDs' });
 
     const epResult = await fetchEpisodes(source as Source, siteIds, { heavenId: heavenId ? String(heavenId) : undefined });
-    if (epResult.error) return res.status(404).json({ error: epResult.error });
+    if (epResult.error) {
+      const debug = req.query.debug === '1' && source === 'anikoto'
+        ? await buildAnikotoDebug(siteIds, malId as string | undefined)
+        : undefined;
+      return res.status(404).json({ error: epResult.error, ...(debug ? { debug } : {}) });
+    }
     const episode = epResult.episodes.find((e: any) => Math.round(e.num) === epNum);
     if (!episode) return res.status(404).json({ error: `Episode ${epNum} not found` });
 
